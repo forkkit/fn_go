@@ -50,10 +50,15 @@ type Provider struct {
 	DisableCerts bool
 	//CompartmentID is the ocid of the functions compartment ID for a given function
 	CompartmentID string
+	// TransportMutator modifies the underpinning transport during the construction of APIClientv2
+	TransportMutator func(t http.RoundTripper) http.RoundTripper
 }
 
 func (op *Provider) APIClientv2() *clientv2.Fn {
 	runtime := openapi.New(op.FnApiUrl.Host, path.Join(op.FnApiUrl.Path, clientv2.DefaultBasePath), []string{op.FnApiUrl.Scheme})
+	if op.TransportMutator != nil {
+		runtime.Transport = op.TransportMutator(runtime.Transport)
+	}
 	runtime.Transport = op.WrapCallTransport(runtime.Transport)
 	return clientv2.New(runtime, strfmt.Default)
 }
@@ -149,7 +154,7 @@ func (op *Provider) WrapCallTransport(roundTripper http.RoundTripper) http.Round
 		roundTripper = InsecureRoundTripper(roundTripper)
 	}
 
-	ociClient := common.RequestSigner(op.KP, []string{"host", "date", "(request-target)"}, []string{"content-length", "content-type", "x-content-sha256"})
+	ociClient := common.RequestSigner(op.KP, []string{"host", "date", "(request-target)", "opc-compartment-id"}, []string{"content-length", "content-type", "x-content-sha256"})
 
 	signingRoundTrripper := ociSigningRoundTripper{
 		transport: roundTripper,
